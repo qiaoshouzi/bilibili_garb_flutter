@@ -1,0 +1,42 @@
+{
+  "name": "CFM.MOE",
+  "headerURL": "https://i0.hdslb.com/bfs/baselabs/6fd7a83ceffcfcffbf1b816e5b79ef744f8dae13.png@1242w_828h_2c.png",
+  "website": "https://b23.cfm.moe",
+  "tintColor": "#d85684",
+  "featuredApps": [
+    "moe.cfm.b23"
+  ],
+  "apps": [
+    {
+      "name": "哔哩装扮",
+      "bundleIdentifier": "moe.cfm.b23",
+      "developerName": "CFM.MOE",
+      "localizedDescription": "获取哔哩装扮卡片",
+      "iconURL": "https://alt-r2.cfm.moe/assets/IOS.png",
+      "tintColor": "#d85684",
+      "category": "utilities",
+      "screenshotURLs": [
+        "https://alt-r2.cfm.moe/assets/screenshot1.jpg",
+        "https://alt-r2.cfm.moe/assets/screenshot2.jpg",
+        "https://alt-r2.cfm.moe/assets/screenshot3.jpg"
+      ],
+      "versions": [
+        {
+          "version": "1.0.0",
+          "buildVersion": "1",
+          "date": "1868-08-12T25:00:00+09:00",
+          "localizedDescription": "这是新的版本喵~",
+          "downloadURL": "xxx",
+          "size": 0
+        }
+      ],
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {
+          "NSPhotoLibraryAddUsageDescription": "We need add only access to save medias",
+          "NSPhotoLibraryUsageDescription": "We need access to save medias"
+        }
+      }
+    }
+  ]
+}

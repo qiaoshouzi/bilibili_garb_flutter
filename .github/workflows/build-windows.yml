@@ -1,0 +1,186 @@
+name: Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version(1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: windows
+            os: windows-latest
+            run_command: |
+              fastforge package --platform windows --targets exe --skip-clean
+              mv dist/*/*.exe bili_garb-windows.exe
+            artifact_path: bili_garb-windows.exe
+          - target: android
+            os: ubuntu-latest
+            run_command: |
+              fastforge package --platform android --targets apk --skip-clean
+              mv dist/*/*.apk bili_garb-android.apk
+            artifact_path: bili_garb-android.apk
+          - target: macos
+            os: macos-26
+            run_command: |
+              fastforge package --platform macos --targets dmg --skip-clean
+              mv dist/*/*.dmg bili_garb-macos.dmg
+            artifact_path: bili_garb-macos.dmg
+          - target: ios
+            os: macos-26
+            run_command: |
+              flutter build ios --build-name=${{ github.event.inputs.version }} --build-number ${{ github.run_number }} --no-codesign
+              cd build/ios/iphoneos
+              mkdir Payload
+              mv Runner.app Payload/
+              zip -r -9 ../../../bili_garb-ios.ipa Payload
+            artifact_path: bili_garb-ios.ipa
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download ChineseSimplified.isl
+        if: matrix.target == 'windows'
+        run: |
+          $dest = "C:\Program Files (x86)\Inno Setup 6\Languages\ChineseSimplified.isl"
+          if (!(Test-Path "C:\Program Files (x86)\Inno Setup 6\Languages\")) {
+            New-Item -ItemType Directory -Force -Path "C:\Program Files (x86)\Inno Setup 6\Languages\"
+          }
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/refs/heads/main/Files/Languages/Unofficial/ChineseSimplified.isl" -OutFile $dest
+        shell: powershell
+
+      - name: Install yq
+        if: matrix.target == 'windows'
+        run: choco install yq -y
+
+      - name: Set Version
+        shell: pwsh
+        run: |
+          $BUILD_NUMBER = "${{ github.run_number }}"
+          $VERSION_NAME = "${{ github.event.inputs.version }}"
+          $FULL_VERSION = "$VERSION_NAME+$BUILD_NUMBER"
+          Write-Host "Version: $FULL_VERSION"
+
+          $env:TARGET_VERSION = $FULL_VERSION
+          yq -i '.version = env(TARGET_VERSION)' pubspec.yaml
+          "full_version=$FULL_VERSION" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      # Cache
+      - name: Cache Pub packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ${{ env.LOCALAPPDATA }}\Pub\Cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      - name: Cache Gradle
+        if: matrix.target == 'android'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Cache CocoaPods
+        if: runner.os == 'macOS'
+        uses: actions/cache@v4
+        with:
+          path: ios/Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
+      # init
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Activate Fastforge
+        if: startsWith(matrix.run_command, 'fastforge')
+        run: dart pub global activate fastforge
+
+      - name: Install appdmg
+        if: matrix.target == 'macos'
+        run: npm install -g appdmg
+
+      # Build
+      - name: Run Build Command
+        run: ${{ matrix.run_command }}
+      
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}-build
+          path: ${{ matrix.artifact_path }}
+          retention-days: 1
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-dist
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ github.event.inputs.version }}+${{ github.run_number }}"
+          name: "Release v${{ github.event.inputs.version }}+${{ github.run_number }}"
+          files: |
+            all-dist/**/*.exe
+            all-dist/**/*.apk
+            all-dist/**/*.dmg
+            all-dist/**/*.ipa
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          BASE_URL: s3://b23-app/${{ github.event.inputs.version }}_${{ github.run_number }}
+        run: |
+          aws s3 cp ./all-dist/windows-build/bili_garb-windows.exe $BASE_URL/bili_garb-windows.exe --endpoint-url $ENDPOINT
+          aws s3 cp ./all-dist/android-build/bili_garb-android.apk $BASE_URL/bili_garb-android.apk --endpoint-url $ENDPOINT
+          aws s3 cp ./all-dist/macos-build/bili_garb-macos.dmg $BASE_URL/bili_garb-macos.dmg --endpoint-url $ENDPOINT
+          aws s3 cp ./all-dist/ios-build/bili_garb-ios.ipa $BASE_URL/bili_garb-ios.ipa --endpoint-url $ENDPOINT
+
+      - name: Deploy to Altstore
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          cd deploy_altstore
+          npm ci
+          node index.js ${{ github.event.inputs.version }} ${{ github.run_number }}
+          npm run deploy
