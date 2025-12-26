@@ -14,7 +14,7 @@
 
 ### 方法一 Scripting (推荐)
 
-详见 [这里](https://github.com/qiaoshouzi/bilibili_garb_scripting)
+详见 [这里](https://github.com/qiaoshouzi/bilibili_garb_scripting?tab=readme-ov-file#%E5%A6%82%E4%BD%95%E4%BD%BF%E7%94%A8)
 
 ### 方法二 AltStore Classic
 
@@ -33,5 +33,6 @@ AltStore Source: `alt.cfm.moe`
 Telegram Channel: [@b23emoji](https://t.me/b23emoji) | [@TaffySticker](https://https://t.me/TaffySticker)
 
 Email: `sticker#cfm.moe`
+
 
 
